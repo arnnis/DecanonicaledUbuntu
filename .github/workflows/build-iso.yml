@@ -178,6 +178,7 @@ jobs:
             mtools \
             dosfstools \
             syslinux-common \
+            syslinux-utils \
             isolinux \
             dpkg-dev \
             apt-utils \
