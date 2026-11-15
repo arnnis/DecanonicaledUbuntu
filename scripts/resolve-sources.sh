@@ -49,23 +49,32 @@ trap 'rm -f "${RAW_SOURCES_FILE}" "${EXISTING_PKGS_FILE}"' EXIT
 if [[ "${BUILD_SCOPE}" == "core" ]]; then
   grep -vE '^\s*(#|$)' "${REPO_ROOT}/config/source-packages/core.txt" | sort -u > "${RAW_SOURCES_FILE}"
 elif [[ "${BUILD_SCOPE}" == "full" ]]; then
-  SEED_PKGS=(ubuntu-minimal ubuntu-standard casper network-manager sudo curl ca-certificates gnupg)
+  SEED_PKGS=(ubuntu-minimal ubuntu-standard casper network-manager sudo curl ca-certificates gnupg syslinux-utils)
+  DRIVER_PKGS=(ubuntu-drivers-common dkms)
   case "${FLAVOR}" in
     gnome-minimal)
       SEED_PKGS+=(ubuntu-desktop-minimal gnome-terminal nautilus gnome-text-editor calamares)
+      DRIVER_PKGS+=(software-properties-gtk)
       ;;
     xfce)
       SEED_PKGS+=(xubuntu-core xfce4-terminal thunar calamares)
+      DRIVER_PKGS+=(software-properties-gtk)
       ;;
     server)
       SEED_PKGS+=(openssh-server htop tmux)
       ;;
   esac
 
-  BIN_PKGS=$(apt-cache depends --recurse --no-suggests \
-    --no-conflicts --no-breaks --no-replaces --no-enhances "${SEED_PKGS[@]}" \
-    | grep -E '^\w' | grep -vE '^(snapd|ubuntu-report|popularity-contest|whoopsie|apport|kerneloops|ubuntu-advantage-tools|ubuntu-pro-client)$' \
-    | sort -u)
+  EXCLUDE_RE='^(snapd|ubuntu-report|popularity-contest|whoopsie|apport|kerneloops|ubuntu-advantage-tools|ubuntu-pro-client|libreoffice|firefox|chromium|thunderbird|rhythmbox|totem|gnome-tour|aisleriot|gnome-mahjongg|gnome-mines|gnome-sudoku)'
+
+  BIN_PKGS=$(
+    {
+      apt-cache depends --recurse --no-recommends --no-suggests \
+        --no-conflicts --no-breaks --no-replaces --no-enhances "${SEED_PKGS[@]}"
+      apt-cache depends --recurse --no-suggests \
+        --no-conflicts --no-breaks --no-replaces --no-enhances "${DRIVER_PKGS[@]}"
+    } | grep -E '^\w' | grep -vE "${EXCLUDE_RE}" | sort -u
+  )
 
   apt-cache show ${BIN_PKGS} 2>/dev/null \
     | awk '
@@ -73,7 +82,7 @@ elif [[ "${BUILD_SCOPE}" == "full" ]]; then
       /^Source: /  { src=$2 }
       /^$/ { if (pkg != "") { print (src != "" ? src : pkg); pkg=""; src="" } }
       END { if (pkg != "") print (src != "" ? src : pkg) }
-    ' | sort -u > "${RAW_SOURCES_FILE}"
+    ' | grep -vE "${EXCLUDE_RE}" | sort -u > "${RAW_SOURCES_FILE}"
 else
   echo "Unknown BUILD_SCOPE: ${BUILD_SCOPE} (expected core or full)" >&2
   exit 1
