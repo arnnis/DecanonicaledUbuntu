@@ -55,8 +55,7 @@ mkdir -p "${STAGED_DIR}"
 if [[ -d "${NEW_DEBS_DIR}" ]] && compgen -G "${NEW_DEBS_DIR}/*.deb" >/dev/null; then
   for f in "${NEW_DEBS_DIR}"/*.deb; do
     base="$(basename "${f}")"
-    safe="${base//+/.}"
-    safe="${safe//~/.}"
+    safe="$(printf '%s' "${base}" | tr '+~:' '...')"
     cp -f "${f}" "${STAGED_DIR}/${safe}"
   done
 fi
@@ -93,6 +92,8 @@ def parse_packages(pkg_file):
                 arch = line.split(": ", 1)[1].strip()
             elif line.startswith("Filename: "):
                 fname = os.path.basename(line.split(": ", 1)[1].strip())
+                fname = fname.replace("+", ".").replace("~", ".").replace(":", ".")
+                b = b.replace(line, f"Filename: {fname}")
         if pkg and arch:
             stanzas[(pkg, arch)] = (ver, fname, b)
     return stanzas
@@ -120,6 +121,8 @@ if new_files:
                 arch = line.split(": ", 1)[1].strip()
             elif line.startswith("Filename: "):
                 fname = os.path.basename(line.split(": ", 1)[1].strip())
+                fname = fname.replace("+", ".").replace("~", ".").replace(":", ".")
+                b = b.replace(line, f"Filename: {fname}")
                 line = f"Filename: {fname}"
             fixed_lines.append(line)
         if pkg and arch:
