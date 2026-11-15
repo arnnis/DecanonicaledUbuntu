@@ -80,7 +80,7 @@ jobs:
     needs: plan-updates
     if: needs.plan-updates.outputs.has_updates == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 360
+    timeout-minutes: 345
     strategy:
       fail-fast: false
       max-parallel: 20

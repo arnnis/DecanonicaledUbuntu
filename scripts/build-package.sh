@@ -57,7 +57,7 @@ EOF
 
 apt-get update -qq
 
-export DEB_BUILD_OPTIONS="nocheck parallel=$(nproc)"
+export DEB_BUILD_OPTIONS="nocheck nodoc parallel=$(nproc)"
 export DEBEMAIL="farm@decanonicaled.local"
 export DEBFULLNAME="DecanonicaledUbuntu Build Farm"
 export PATH="/usr/lib/ccache:${PATH}"
@@ -104,7 +104,7 @@ for pkg in ${PACKAGES}; do
   dch --local "+decanonicaled" --distribution "${UBUNTU_CODENAME}" \
     "Compiled from source by DecanonicaledUbuntu build farm" || true
 
-  if dpkg-buildpackage -b -uc -us -j"$(nproc)"; then
+  if timeout 19200 dpkg-buildpackage -b -uc -us -j"$(nproc)"; then
     popd >/dev/null
     find "${PKG_DIR}" -maxdepth 1 -name '*.deb' \
       ! -name '*-dbgsym_*.deb' \

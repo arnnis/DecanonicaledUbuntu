@@ -4,7 +4,7 @@ set -euo pipefail
 UBUNTU_CODENAME="${UBUNTU_CODENAME:-resolute}"
 FLAVOR="${FLAVOR:-gnome-minimal}"
 BUILD_SCOPE="${BUILD_SCOPE:-core}"
-MAX_WORKERS="${MAX_WORKERS:-18}"
+MAX_WORKERS="${MAX_WORKERS:-60}"
 EXISTING_PACKAGES_URLS="${EXISTING_PACKAGES_URLS:-}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -62,7 +62,7 @@ elif [[ "${BUILD_SCOPE}" == "full" ]]; then
       ;;
   esac
 
-  BIN_PKGS=$(apt-cache depends --recurse --no-recommends --no-suggests \
+  BIN_PKGS=$(apt-cache depends --recurse --no-suggests \
     --no-conflicts --no-breaks --no-replaces --no-enhances "${SEED_PKGS[@]}" \
     | grep -E '^\w' | grep -vE '^(snapd|ubuntu-report|popularity-contest|whoopsie|apport|kerneloops|ubuntu-advantage-tools|ubuntu-pro-client)$' \
     | sort -u)

@@ -34,10 +34,8 @@ lb config \
   --mirror-binary "http://archive.ubuntu.com/ubuntu/" \
   --linux-flavours generic \
   --binary-images iso-hybrid \
-  --bootloaders "grub-efi,syslinux" \
-  --apt-recommends false \
+  --apt-recommends true \
   --security true \
-  --updates true \
   --iso-application "${ISO_NAME}" \
   --iso-volume "${ISO_NAME}-${UBUNTU_CODENAME}"
 
@@ -138,6 +136,8 @@ gnome-terminal
 nautilus
 gnome-text-editor
 calamares
+ubuntu-drivers-common
+dkms
 EOF
     ;;
   xfce)
@@ -146,6 +146,8 @@ xubuntu-core
 xfce4-terminal
 thunar
 calamares
+ubuntu-drivers-common
+dkms
 EOF
     ;;
   server)
