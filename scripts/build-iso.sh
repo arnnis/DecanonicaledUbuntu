@@ -33,7 +33,7 @@ lb config \
   --mirror-chroot "http://archive.ubuntu.com/ubuntu/" \
   --mirror-binary "http://archive.ubuntu.com/ubuntu/" \
   --linux-flavours generic \
-  --binary-images iso-hybrid \
+  --binary-images iso \
   --bootloader grub2 \
   --memtest none \
   --apt-recommends true \
