@@ -67,13 +67,23 @@ elif [[ "${BUILD_SCOPE}" == "full" ]]; then
 
   EXCLUDE_RE='^(snapd|ubuntu-report|popularity-contest|whoopsie|apport|kerneloops|ubuntu-advantage-tools|ubuntu-pro-client|libreoffice|firefox|chromium|thunderbird|rhythmbox|totem|gnome-tour|aisleriot|gnome-mahjongg|gnome-mines|gnome-sudoku)'
 
+  # Pin snapd out so APT's real solver never selects it during simulation
+  cat <<'EOF' > /etc/apt/preferences.d/nosnap.pref
+Package: snapd
+Pin: release a=*
+Pin-Priority: -10
+EOF
+
+  # Use APT's real solver (with Recommends ON) + base container packages, instead of
+  # apt-cache depends --recurse which expands every virtual provider (linux-aws, gcc-11..16, etc.)
   BIN_PKGS=$(
     {
-      apt-cache depends --recurse --no-recommends --no-suggests \
-        --no-conflicts --no-breaks --no-replaces --no-enhances "${SEED_PKGS[@]}"
-      apt-cache depends --recurse --no-suggests \
-        --no-conflicts --no-breaks --no-replaces --no-enhances "${DRIVER_PKGS[@]}"
-    } | grep -E '^\w' | grep -vE "${EXCLUDE_RE}" | sort -u
+      dpkg-query -W -f='${Package}\n'
+      apt-get install --simulate --install-recommends "${SEED_PKGS[@]}" "${DRIVER_PKGS[@]}" 2>/dev/null \
+        | awk '/^Inst / { print $2 }'
+      echo "linux-image-generic"
+      echo "linux-headers-generic"
+    } | grep -vE "${EXCLUDE_RE}" | sort -u
   )
 
   apt-cache show ${BIN_PKGS} 2>/dev/null \
