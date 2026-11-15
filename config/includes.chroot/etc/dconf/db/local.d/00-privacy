@@ -1,0 +1,7 @@
+[org/gnome/desktop/privacy]
+report-technical-problems=false
+send-software-usage-stats=false
+remember-recent-files=true
+
+[com/ubuntu/update-notifier]
+no-show-notifications=false

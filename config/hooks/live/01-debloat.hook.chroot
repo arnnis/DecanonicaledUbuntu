@@ -1,0 +1,64 @@
+#!/bin/bash
+set -euo pipefail
+
+echo "=== [01-debloat] Removing Snap, telemetry, and Canonical bloat ==="
+
+export DEBIAN_FRONTEND=noninteractive
+
+# Purge snapd and snap-related packages
+apt-get purge -y \
+  snapd \
+  gnome-software-plugin-snap \
+  libsnapd-glib-2-1 \
+  libsnapd-glib1 \
+  2>/dev/null || true
+
+# Purge telemetry, crash reporting, and usage-tracking packages
+apt-get purge -y \
+  ubuntu-report \
+  popularity-contest \
+  whoopsie \
+  apport \
+  apport-gtk \
+  apport-symptoms \
+  kerneloops \
+  2>/dev/null || true
+
+# Purge Ubuntu Pro / Advantage client if present (keep apt working cleanly)
+apt-get purge -y \
+  ubuntu-advantage-tools \
+  ubuntu-pro-client \
+  ubuntu-pro-client-l10n \
+  2>/dev/null || true
+
+# Purge common pre-installed bloat (games, web launchers, tour)
+apt-get purge -y \
+  gnome-tour \
+  ubuntu-web-launchers \
+  aisleriot \
+  gnome-mahjongg \
+  gnome-mines \
+  gnome-sudoku \
+  rhythmbox \
+  rhythmbox-plugins \
+  totem \
+  thunderbird \
+  2>/dev/null || true
+
+# Clean up orphaned dependencies and APT cache
+apt-get autoremove --purge -y
+apt-get clean
+
+# Remove residual snap directories
+rm -rf /snap /var/snap /var/lib/snapd /var/cache/snapd /root/snap /etc/skel/snap
+
+# Disable motd-news systemd timer if present
+systemctl disable motd-news.timer 2>/dev/null || true
+systemctl mask motd-news.service 2>/dev/null || true
+
+# Update dconf database if dconf is installed
+if command -v dconf >/dev/null 2>&1; then
+  dconf update
+fi
+
+echo "=== [01-debloat] Completed ==="

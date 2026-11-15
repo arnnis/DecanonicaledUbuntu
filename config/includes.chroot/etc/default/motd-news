@@ -1,0 +1,2 @@
+# Disable Ubuntu MOTD news fetching from motd.ubuntu.com
+ENABLED=0

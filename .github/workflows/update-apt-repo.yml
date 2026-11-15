@@ -1,0 +1,166 @@
+name: Incremental APT Repo Update (Daily)
+
+on:
+  schedule:
+    # Every day at 02:00 UTC
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      ubuntu_codename:
+        description: "Ubuntu codename (resolute = 26.04 LTS, noble = 24.04 LTS, jammy = 22.04 LTS)"
+        required: true
+        default: "resolute"
+        type: choice
+        options:
+          - resolute
+          - noble
+          - jammy
+      flavor:
+        description: "Flavor (used when build_scope=full)"
+        required: true
+        default: "gnome-minimal"
+        type: choice
+        options:
+          - gnome-minimal
+          - xfce
+          - server
+      build_scope:
+        description: "Source scope to check for upstream updates"
+        required: true
+        default: "core"
+        type: choice
+        options:
+          - core
+          - full
+
+permissions:
+  contents: write
+
+env:
+  UBUNTU_CODENAME: ${{ github.event.inputs.ubuntu_codename || 'resolute' }}
+  FLAVOR: ${{ github.event.inputs.flavor || 'gnome-minimal' }}
+  BUILD_SCOPE: ${{ github.event.inputs.build_scope || 'core' }}
+
+jobs:
+  plan-updates:
+    name: Check Upstream Updates
+    runs-on: ubuntu-24.04
+    outputs:
+      batches: ${{ steps.resolve.outputs.batches }}
+      has_updates: ${{ steps.resolve.outputs.has_updates }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Diff against existing GitHub Release APT shards
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHARD_TAGS=$(gh release list --limit 100 --json tagName -q '.[].tagName' | grep -E "^apt-pool-${UBUNTU_CODENAME}-[0-9]{2}$" | sort || true)
+          URLS=""
+          for tag in ${SHARD_TAGS}; do
+            URLS="${URLS} https://github.com/${{ github.repository }}/releases/download/${tag}/Packages.gz"
+          done
+
+          chmod +x scripts/resolve-sources.sh
+          BATCHES_JSON="$(EXISTING_PACKAGES_URLS="${URLS# }" ./scripts/resolve-sources.sh)"
+          echo "batches=${BATCHES_JSON}" >> "$GITHUB_OUTPUT"
+          if [[ "${BATCHES_JSON}" == "[]" ]]; then
+            echo "has_updates=false" >> "$GITHUB_OUTPUT"
+            echo "All tracked source packages are already up to date!"
+          else
+            echo "has_updates=true" >> "$GITHUB_OUTPUT"
+            echo "=== Packages queued for incremental rebuild ==="
+            echo "${BATCHES_JSON}" | jq .
+          fi
+
+  build-updates:
+    name: Farm Worker (${{ matrix.batch.id }})
+    needs: plan-updates
+    if: needs.plan-updates.outputs.has_updates == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        batch: ${{ fromJson(needs.plan-updates.outputs.batches) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Maximize available disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet \
+            /opt/ghc \
+            /usr/local/share/boost \
+            /usr/local/lib/android \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/.ghcup || true
+          sudo docker system prune -af || true
+          sudo apt-get clean
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ env.UBUNTU_CODENAME }}-${{ matrix.batch.id }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-${{ env.UBUNTU_CODENAME }}-${{ matrix.batch.id }}-
+            ccache-${{ env.UBUNTU_CODENAME }}-
+
+      - name: Compile updated source packages in target container
+        env:
+          PACKAGES: ${{ matrix.batch.packages }}
+          OUT_DIR: ${{ github.workspace }}/out-debs
+        run: |
+          chmod +x scripts/build-package.sh
+          ./scripts/build-package.sh
+
+      - name: Upload compiled .deb packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: farm-debs-${{ matrix.batch.id }}
+          path: out-debs/*
+          if-no-files-found: warn
+          retention-days: 3
+
+  publish-updates:
+    name: Update Sharded GitHub Releases
+    needs: [plan-updates, build-updates]
+    if: ${{ !cancelled() && needs.plan-updates.outputs.has_updates == 'true' }}
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download newly compiled .deb packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: farm-debs-*
+          path: farm-debs-raw
+          merge-multiple: true
+
+      - name: Collect .debs
+        run: |
+          mkdir -p farm-debs
+          find farm-debs-raw -name '*.deb' -exec mv -n {} farm-debs/ \; || true
+          echo "=== Updated .deb count: $(find farm-debs -name '*.deb' | wc -l) ==="
+          rm -rf farm-debs-raw
+
+      - name: Install APT repo tools
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y dpkg-dev apt-utils gnupg
+
+      - name: Publish updated shards to GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+          APT_GPG_PASSPHRASE: ${{ secrets.APT_GPG_PASSPHRASE }}
+        run: |
+          chmod +x scripts/publish-release-shards.sh
+          WORK_DIR="$PWD/release-shards" NEW_DEBS_DIR="$PWD/farm-debs" ./scripts/publish-release-shards.sh

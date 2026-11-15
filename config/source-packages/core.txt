@@ -1,0 +1,16 @@
+# Core Ubuntu source packages compiled from source by the build farm.
+# Add any additional source package names here (one per line),
+# or select build_scope=full in the GitHub Actions workflow to resolve
+# all source packages for the chosen flavor.
+linux
+systemd
+grub2
+casper
+apt
+dpkg
+bash
+coreutils
+sudo
+network-manager
+squashfs-tools
+openssh

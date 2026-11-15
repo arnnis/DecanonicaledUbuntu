@@ -1,0 +1,12 @@
+target/
+node_modules/
+.godot/
+*.log
+.DS_Store
+
+build/
+dist/
+upstream-livecd-rootfs/
+farm-debs/
+out-debs/
+release-shards/

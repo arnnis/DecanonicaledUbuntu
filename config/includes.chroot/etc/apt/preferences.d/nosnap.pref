@@ -1,0 +1,8 @@
+# Prevent snapd from being installed by APT or as a dependency
+Package: snapd
+Pin: release a=*
+Pin-Priority: -10
+
+Package: gnome-software-plugin-snap
+Pin: release a=*
+Pin-Priority: -10
