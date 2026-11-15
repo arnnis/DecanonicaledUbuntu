@@ -222,7 +222,8 @@ jobs:
       - name: Generate SHA256 checksums
         run: |
           mkdir -p dist
-          mv build/*.iso dist/
+          sudo mv build/*.iso dist/
+          sudo chown -R "$USER:$USER" dist
           cd dist
           sha256sum *.iso > SHA256SUMS
           ls -lh
