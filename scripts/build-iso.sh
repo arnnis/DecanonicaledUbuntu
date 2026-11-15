@@ -34,6 +34,7 @@ lb config \
   --mirror-binary "http://archive.ubuntu.com/ubuntu/" \
   --linux-flavours generic \
   --binary-images iso-hybrid \
+  --memtest none \
   --apt-recommends true \
   --security true \
   --iso-application "${ISO_NAME}" \
