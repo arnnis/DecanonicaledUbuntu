@@ -127,6 +127,7 @@ ca-certificates
 gnupg
 vim-tiny
 less
+syslinux-utils
 EOF
 
 # Flavor-specific packages
