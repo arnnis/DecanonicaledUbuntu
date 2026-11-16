@@ -36,15 +36,16 @@ lb config \
   --binary-images iso \
   --bootloader grub2 \
   --memtest none \
+  --compression xz \
   --apt-recommends true \
   --security true \
   --iso-application "${ISO_NAME}" \
   --iso-volume "${ISO_NAME}-${UBUNTU_CODENAME}"
 
-# Copy custom includes and hooks
-mkdir -p config/includes.chroot config/hooks/live config/package-lists config/archives
+# Copy custom includes and hooks (live-build 3.0 reads hooks from config/hooks/*.hook.chroot)
+mkdir -p config/includes.chroot config/hooks config/package-lists config/archives
 cp -r "${REPO_ROOT}/config/includes.chroot/." config/includes.chroot/
-cp -r "${REPO_ROOT}/config/hooks/live/." config/hooks/live/
+cp -r "${REPO_ROOT}/config/hooks/live/." config/hooks/
 
 # Bake persistent sharded GitHub Releases APT repo into the installed system for future updates
 if [[ -n "${APT_SHARD_URLS}" ]] && [[ -n "${APT_GPG_KEY_FILE}" ]] && [[ -f "${APT_GPG_KEY_FILE}" ]]; then
@@ -84,7 +85,7 @@ if [[ -n "${FARM_DEBS_DIR}" ]] && [[ -d "${FARM_DEBS_DIR}" ]] && compgen -G "${F
   popd >/dev/null
 
   # Upgrade installed base packages to farm-compiled versions, then remove repo from final squashfs
-  cat <<'EOF' > config/hooks/live/00-upgrade-farm.hook.chroot
+  cat <<'EOF' > config/hooks/00-upgrade-farm.hook.chroot
 #!/bin/bash
 set -euo pipefail
 echo "=== [00-upgrade-farm] Configuring & upgrading from farm-compiled APT repo ==="
@@ -104,7 +105,7 @@ apt-get update
 apt-get dist-upgrade -y --allow-downgrades
 EOF
 
-  cat <<'EOF' > config/hooks/live/99-cleanup-farm-repo.hook.chroot
+  cat <<'EOF' > config/hooks/99-cleanup-farm-repo.hook.chroot
 #!/bin/bash
 set -euo pipefail
 echo "=== [99-cleanup-farm-repo] Removing temporary local APT repo from image ==="
@@ -113,7 +114,7 @@ apt-get clean
 EOF
 fi
 
-chmod +x config/hooks/live/*.hook.chroot
+chmod +x config/hooks/*.hook.chroot
 
 # Base packages needed across all flavors (excluding snapd & telemetry)
 cat <<'EOF' > config/package-lists/decanonicaled.list.chroot
