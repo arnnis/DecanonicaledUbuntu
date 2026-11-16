@@ -39,6 +39,11 @@ on:
         required: false
         default: "decanonicaled-ubuntu"
         type: string
+      reuse_farm_run_id:
+        description: "Optional: existing workflow run ID to reuse compiled farm-debs-* artifacts (skips build-farm)"
+        required: false
+        default: ""
+        type: string
   push:
     tags:
       - "v*"
@@ -56,6 +61,7 @@ env:
 jobs:
   plan-farm:
     name: Plan Build Farm Batches
+    if: ${{ inputs.reuse_farm_run_id == '' }}
     runs-on: ubuntu-24.04
     outputs:
       batches: ${{ steps.resolve.outputs.batches }}
@@ -75,6 +81,7 @@ jobs:
   build-farm:
     name: Farm Worker (${{ matrix.batch.id }})
     needs: plan-farm
+    if: ${{ inputs.reuse_farm_run_id == '' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 345
     strategy:
@@ -125,8 +132,8 @@ jobs:
 
   build-iso:
     name: Publish Sharded APT Repo & Build ISO
-    needs: build-farm
-    if: ${{ !cancelled() }}
+    needs: [plan-farm, build-farm]
+    if: ${{ !cancelled() && (inputs.reuse_farm_run_id != '' || needs.build-farm.result != 'cancelled') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
 
@@ -146,12 +153,23 @@ jobs:
           sudo apt-get clean
           df -h
 
-      - name: Download all farm-compiled .deb packages
+      - name: Download all farm-compiled .deb packages (current run)
+        if: ${{ inputs.reuse_farm_run_id == '' }}
         uses: actions/download-artifact@v4
         with:
           pattern: farm-debs-*
           path: farm-debs-raw
           merge-multiple: true
+
+      - name: Download all farm-compiled .deb packages (reused run)
+        if: ${{ inputs.reuse_farm_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: farm-debs-*
+          path: farm-debs-raw
+          merge-multiple: true
+          run-id: ${{ inputs.reuse_farm_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Collect .debs and report any farm failures
         run: |

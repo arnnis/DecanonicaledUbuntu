@@ -231,10 +231,41 @@ while IFS= read -r tag; do
       --prerelease=false
   fi
 
-  # Upload metadata + new .debs
-  gh release upload "${tag}" Packages Packages.gz Release Release.gpg InRelease "${WORK_DIR}/decanonicaled.gpg" --clobber
+  # Helper to upload with retry + backoff on GitHub secondary rate limits
+  upload_with_retry() {
+    local asset_path="$1"
+    local attempt=1
+    local max_attempts=6
+    while (( attempt <= max_attempts )); do
+      if gh release upload "${tag}" "${asset_path}" --clobber 2>&1; then
+        return 0
+      fi
+      local wait_sec=$(( attempt * 60 ))
+      echo "Upload failed/rate-limited for $(basename "${asset_path}") (attempt ${attempt}/${max_attempts}); sleeping ${wait_sec}s..."
+      sleep "${wait_sec}"
+      ((attempt++))
+    done
+    echo "ERROR: Failed to upload $(basename "${asset_path}") after ${max_attempts} attempts" >&2
+    return 1
+  }
+
+  # Upload metadata
+  for meta in Packages Packages.gz Release Release.gpg InRelease "${WORK_DIR}/decanonicaled.gpg"; do
+    upload_with_retry "${meta}"
+    sleep 0.5
+  done
+
+  # Upload new .debs (skipping ones already present on the release to avoid redundant API calls)
   if [[ -d upload ]] && compgen -G "upload/*.deb" >/dev/null; then
-    gh release upload "${tag}" upload/*.deb --clobber
+    EXISTING_ASSETS="$(gh release view "${tag}" --json assets -q '.assets[].name' 2>/dev/null || true)"
+    for deb in upload/*.deb; do
+      deb_name="$(basename "${deb}")"
+      if printf '%s\n' "${EXISTING_ASSETS}" | grep -Fxq "${deb_name}"; then
+        continue
+      fi
+      upload_with_retry "${deb}"
+      sleep 0.6
+    done
   fi
   popd >/dev/null
 done < "${DIRTY_SHARDS_FILE}"
