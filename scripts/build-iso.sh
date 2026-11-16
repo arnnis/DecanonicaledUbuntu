@@ -97,7 +97,7 @@ INNER
 cat <<'INNER' > /etc/apt/preferences.d/decanonicaled-local.pref
 Package: *
 Pin: origin ""
-Pin-Priority: 1001
+Pin-Priority: 1002
 INNER
 
 apt-get update

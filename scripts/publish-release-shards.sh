@@ -55,7 +55,7 @@ mkdir -p "${STAGED_DIR}"
 if [[ -d "${NEW_DEBS_DIR}" ]] && compgen -G "${NEW_DEBS_DIR}/*.deb" >/dev/null; then
   for f in "${NEW_DEBS_DIR}"/*.deb; do
     base="$(basename "${f}")"
-    safe="$(printf '%s' "${base}" | tr '+~:' '...')"
+    safe="$(printf '%s' "${base}" | tr '+~:' '...' | sed -E 's/\.{2,}/./g')"
     cp -f "${f}" "${STAGED_DIR}/${safe}"
   done
 fi
@@ -68,6 +68,7 @@ DELETE_ASSETS_FILE="${WORK_DIR}/delete_assets.txt"
 
 python3 - "${WORK_DIR}/shards" "${STAGED_DIR}" "${SHARD_PREFIX}" "${MAX_DEBS_PER_SHARD}" "${DIRTY_SHARDS_FILE}" "${DELETE_ASSETS_FILE}" <<'PY'
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -92,7 +93,7 @@ def parse_packages(pkg_file):
                 arch = line.split(": ", 1)[1].strip()
             elif line.startswith("Filename: "):
                 fname = os.path.basename(line.split(": ", 1)[1].strip())
-                fname = fname.replace("+", ".").replace("~", ".").replace(":", ".")
+                fname = re.sub(r"\.{2,}", ".", fname.replace("+", ".").replace("~", ".").replace(":", "."))
                 b = b.replace(line, f"Filename: {fname}")
         if pkg and arch:
             stanzas[(pkg, arch)] = (ver, fname, b)
@@ -121,7 +122,7 @@ if new_files:
                 arch = line.split(": ", 1)[1].strip()
             elif line.startswith("Filename: "):
                 fname = os.path.basename(line.split(": ", 1)[1].strip())
-                fname = fname.replace("+", ".").replace("~", ".").replace(":", ".")
+                fname = re.sub(r"\.{2,}", ".", fname.replace("+", ".").replace("~", ".").replace(":", "."))
                 b = b.replace(line, f"Filename: {fname}")
                 line = f"Filename: {fname}"
             fixed_lines.append(line)
@@ -255,12 +256,13 @@ while IFS= read -r tag; do
     sleep 0.5
   done
 
-  # Upload new .debs (skipping ones already present on the release to avoid redundant API calls)
+  # Upload new .debs (skipping only if asset exists AND its SHA256 digest already matches)
   if [[ -d upload ]] && compgen -G "upload/*.deb" >/dev/null; then
-    EXISTING_ASSETS="$(gh release view "${tag}" --json assets -q '.assets[].name' 2>/dev/null || true)"
+    EXISTING_ASSET_DIGESTS="$(gh release view "${tag}" --json assets --jq '.assets[] | "\(.name)\t\(.digest)"' 2>/dev/null || true)"
     for deb in upload/*.deb; do
       deb_name="$(basename "${deb}")"
-      if printf '%s\n' "${EXISTING_ASSETS}" | grep -Fxq "${deb_name}"; then
+      deb_sha="sha256:$(sha256sum "${deb}" | awk '{print $1}')"
+      if printf '%s\n' "${EXISTING_ASSET_DIGESTS}" | grep -Fxq "${deb_name}	${deb_sha}"; then
         continue
       fi
       upload_with_retry "${deb}"
