@@ -262,7 +262,7 @@ while IFS= read -r tag; do
     for deb in upload/*.deb; do
       deb_name="$(basename "${deb}")"
       deb_sha="sha256:$(sha256sum "${deb}" | awk '{print $1}')"
-      if printf '%s\n' "${EXISTING_ASSET_DIGESTS}" | grep -Fxq "${deb_name}	${deb_sha}"; then
+      if grep -Fxq "${deb_name}	${deb_sha}" <<< "${EXISTING_ASSET_DIGESTS}"; then
         continue
       fi
       upload_with_retry "${deb}"
