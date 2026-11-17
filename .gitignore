@@ -10,3 +10,6 @@ upstream-livecd-rootfs/
 farm-debs/
 out-debs/
 release-shards/
+*.iso
+*.zip
+SHA256SUMS
