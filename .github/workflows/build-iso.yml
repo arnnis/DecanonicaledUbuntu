@@ -49,6 +49,7 @@ on:
       - "v*"
 
 permissions:
+  actions: read
   contents: write
 
 env:
@@ -260,3 +261,123 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
+
+  test-iso:
+    name: QEMU Boot Test (BIOS & UEFI)
+    needs: build-iso
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Maximize disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android || true
+          sudo apt-get clean
+
+      - name: Download built ISO artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.ISO_NAME }}-${{ env.UBUNTU_CODENAME }}-${{ env.FLAVOR }}-${{ env.BUILD_SCOPE }}
+          path: iso-dist
+
+      - name: Verify ISO checksum
+        run: |
+          cd iso-dist
+          sha256sum -c SHA256SUMS
+
+      - name: Install QEMU & OVMF (UEFI)
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            qemu-system-x86 \
+            ovmf \
+            python3-pil
+
+      - name: Boot ISO in QEMU (BIOS & UEFI) and capture screenshots
+        run: |
+          ISO_FILE="$(find iso-dist -maxdepth 1 -name '*.iso' | head -n 1)"
+          mkdir -p test-results
+
+          ACCEL_ARGS="-accel tcg"
+          if [[ -e /dev/kvm ]] && sudo chmod 666 /dev/kvm 2>/dev/null; then
+            ACCEL_ARGS="-enable-kvm -cpu host"
+            echo "KVM acceleration enabled!"
+          else
+            echo "KVM unavailable; using TCG software emulation."
+          fi
+
+          run_boot_test() {
+            local mode="$1"
+            local port="$2"
+            local extra_args="$3"
+            echo "=== Starting ${mode} boot test (QMP port ${port}) ==="
+
+            qemu-system-x86_64 \
+              -m 4096 -smp 4 ${ACCEL_ARGS} \
+              ${extra_args} \
+              -cdrom "${ISO_FILE}" -boot d \
+              -vga std -display none \
+              -serial "file:test-results/${mode}-serial.log" \
+              -qmp "tcp:127.0.0.1:${port},server,nowait" &
+            local qpid=$!
+
+            python3 - "${mode}" "${port}" <<'PY'
+          import json, socket, sys, time
+          from PIL import Image
+
+          mode = sys.argv[1]
+          port = int(sys.argv[2])
+          sock = None
+          for _ in range(15):
+              try:
+                  sock = socket.create_connection(("127.0.0.1", port), timeout=10)
+                  break
+              except OSError:
+                  time.sleep(0.5)
+          if sock is None:
+              raise RuntimeError(f"Could not connect to QMP on port {port}")
+
+          f = sock.makefile("rw")
+          f.readline()
+          f.write(json.dumps({"execute": "qmp_capabilities"}) + "\n")
+          f.flush()
+          f.readline()
+
+          prev = 0
+          for t in (3, 15, 45, 90):
+              time.sleep(t - prev)
+              prev = t
+              ppm = f"test-results/{mode}-{t}s.ppm"
+              png = f"test-results/{mode}-{t}s.png"
+              f.write(json.dumps({"execute": "screendump", "arguments": {"filename": ppm}}) + "\n")
+              f.flush()
+              while True:
+                  resp = json.loads(f.readline())
+                  if "return" in resp or "error" in resp:
+                      break
+              Image.open(ppm).save(png)
+              print(f"Captured {png} ({Image.open(png).size})")
+
+          sock.close()
+          PY
+
+            kill "${qpid}" 2>/dev/null || true
+            wait "${qpid}" 2>/dev/null || true
+          }
+
+          run_boot_test "bios" "4444" ""
+
+          OVMF_CODE="$(find /usr/share/OVMF /usr/share/ovmf -name 'OVMF_CODE*.fd' ! -name '*secboot*' ! -name '*ms*' ! -name '*snakeoil*' 2>/dev/null | head -n 1)"
+          if [[ -n "${OVMF_CODE}" ]]; then
+            run_boot_test "uefi" "4445" "-drive if=pflash,format=raw,readonly=on,file=${OVMF_CODE}"
+          else
+            echo "OVMF_CODE not found; skipping UEFI test."
+          fi
+
+      - name: Upload QEMU boot screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-boot-test-${{ github.run_id }}
+          path: test-results/*.png
+          retention-days: 7
