@@ -44,14 +44,47 @@ jobs:
           ls -lh
           sha256sum -c SHA256SUMS
 
-      - name: Install QEMU & OVMF (UEFI)
+      - name: Install QEMU, OVMF, & SquashFS tools
         run: |
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
             qemu-system-x86 \
             ovmf \
-            python3-pil \
-            netcat-openbsd
+            squashfs-tools \
+            python3-pil
+
+      - name: Verify ISO APT config & test apt update/upgrade against GitHub Releases
+        run: |
+          ISO_FILE="$(find iso-dist -maxdepth 1 -name '*.iso' | head -n 1)"
+          sudo mkdir -p /mnt/iso
+          sudo mount -o loop,ro "${ISO_FILE}" /mnt/iso
+          sudo unsquashfs -f -d extracted-apt /mnt/iso/casper/filesystem.squashfs \
+            etc/apt/keyrings/decanonicaled.gpg \
+            etc/apt/sources.list.d/decanonicaled.list \
+            etc/apt/preferences.d/decanonicaled.pref
+          sudo umount /mnt/iso
+
+          echo "=== Extracted decanonicaled.list from ISO ==="
+          cat extracted-apt/etc/apt/sources.list.d/decanonicaled.list
+          echo "=== Extracted decanonicaled.pref from ISO ==="
+          cat extracted-apt/etc/apt/preferences.d/decanonicaled.pref
+
+          docker run --rm \
+            -v "$PWD/extracted-apt/etc/apt:/tmp/iso-apt:ro" \
+            ubuntu:resolute \
+            bash -euo pipefail -c '
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -qq
+              apt-get install -y -qq ca-certificates >/dev/null
+              install -d -m 0755 /etc/apt/keyrings /etc/apt/sources.list.d /etc/apt/preferences.d
+              cp /tmp/iso-apt/keyrings/decanonicaled.gpg /etc/apt/keyrings/decanonicaled.gpg
+              cp /tmp/iso-apt/sources.list.d/decanonicaled.list /etc/apt/sources.list.d/decanonicaled.list
+              cp /tmp/iso-apt/preferences.d/decanonicaled.pref /etc/apt/preferences.d/decanonicaled.pref
+              apt-get update
+              apt-cache policy bash systemd
+              apt-get dist-upgrade -y
+              dpkg-query -W -f="${Package}\t${Version}\n" bash systemd
+            '
 
       - name: Boot ISO in QEMU (BIOS & UEFI) and capture screenshots
         run: |
