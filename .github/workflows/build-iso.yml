@@ -285,6 +285,21 @@ jobs:
           cd iso-dist
           sha256sum -c SHA256SUMS
 
+      - name: Audit ISO manifest (zero bloat & required packages)
+        run: |
+          ISO_FILE="$(find iso-dist -maxdepth 1 -name '*.iso' | head -n 1)"
+          sudo mkdir -p /mnt/iso
+          sudo mount -o loop,ro "${ISO_FILE}" /mnt/iso
+          MANIFEST="/mnt/iso/casper/filesystem.manifest"
+          echo "=== Farm-compiled (+decanonicaled) packages: $(grep -c '+decanonicaled' "${MANIFEST}" || true) / $(wc -l < "${MANIFEST}") ==="
+          FORBIDDEN_RE='^(snapd|ubuntu-report|popularity-contest|whoopsie|apport|apport-gtk|ubuntu-advantage-tools|ubuntu-pro-client)\s'
+          if grep -E "${FORBIDDEN_RE}" "${MANIFEST}"; then
+            echo "ERROR: Forbidden package found in ISO manifest!" >&2
+            sudo umount /mnt/iso
+            exit 1
+          fi
+          sudo umount /mnt/iso
+
       - name: Install QEMU & OVMF (UEFI)
         run: |
           sudo apt-get update

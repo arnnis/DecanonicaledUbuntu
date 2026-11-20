@@ -44,6 +44,39 @@ jobs:
           ls -lh
           sha256sum -c SHA256SUMS
 
+      - name: Audit ISO manifest (zero bloat, self-compiled ratio, & required packages)
+        run: |
+          ISO_FILE="$(find iso-dist -maxdepth 1 -name '*.iso' | head -n 1)"
+          sudo mkdir -p /mnt/iso
+          sudo mount -o loop,ro "${ISO_FILE}" /mnt/iso
+
+          MANIFEST="/mnt/iso/casper/filesystem.manifest"
+          TOTAL_COUNT=$(wc -l < "${MANIFEST}")
+          FARM_COUNT=$(grep -c '+decanonicaled' "${MANIFEST}" || true)
+          echo "=== Farm-compiled (+decanonicaled) packages: ${FARM_COUNT} / ${TOTAL_COUNT} ==="
+
+          FORBIDDEN_RE='^(snapd|ubuntu-report|popularity-contest|whoopsie|apport|apport-gtk|ubuntu-advantage-tools|ubuntu-pro-client)\s'
+          if grep -E "${FORBIDDEN_RE}" "${MANIFEST}"; then
+            echo "ERROR: Forbidden Canonical/telemetry/snap package found in ISO manifest!" >&2
+            sudo umount /mnt/iso
+            exit 1
+          fi
+          echo "PASS: Zero forbidden snap/telemetry/Pro packages present."
+
+          for req in firefox calamares ubuntu-drivers-common dkms; do
+            if ! grep -qE "^${req}\s" "${MANIFEST}"; then
+              echo "ERROR: Required package '${req}' missing from ISO manifest!" >&2
+              sudo umount /mnt/iso
+              exit 1
+            fi
+          done
+          echo "PASS: firefox, calamares, ubuntu-drivers-common, and dkms are all present."
+
+          echo "=== Non-farm packages in ISO (first 60) ==="
+          grep -v '+decanonicaled' "${MANIFEST}" | head -n 60 || true
+
+          sudo umount /mnt/iso
+
       - name: Install QEMU, OVMF, & SquashFS tools
         run: |
           sudo apt-get update
@@ -61,8 +94,14 @@ jobs:
           sudo unsquashfs -f -d extracted-apt /mnt/iso/casper/filesystem.squashfs \
             etc/apt/keyrings/decanonicaled.gpg \
             etc/apt/sources.list.d/decanonicaled.list \
-            etc/apt/preferences.d/decanonicaled.pref
+            etc/apt/preferences.d/decanonicaled.pref \
+            etc/calamares
           sudo umount /mnt/iso
+
+          echo "=== Calamares config inside ISO ==="
+          ls -la extracted-apt/etc/calamares/ || true
+          cat extracted-apt/etc/calamares/settings.conf 2>/dev/null || echo "WARNING: No /etc/calamares/settings.conf found!"
+          cat extracted-apt/etc/calamares/modules/unpackfs.conf 2>/dev/null || echo "WARNING: No /etc/calamares/modules/unpackfs.conf found!"
 
           echo "=== Extracted decanonicaled.list from ISO ==="
           cat extracted-apt/etc/apt/sources.list.d/decanonicaled.list
