@@ -68,8 +68,9 @@ jobs:
 
           run_boot_test() {
             local mode="$1"
-            local extra_args="$2"
-            echo "=== Starting ${mode} boot test ==="
+            local port="$2"
+            local extra_args="$3"
+            echo "=== Starting ${mode} boot test (QMP port ${port}) ==="
 
             qemu-system-x86_64 \
               -m 4096 -smp 4 ${ACCEL_ARGS} \
@@ -77,23 +78,34 @@ jobs:
               -cdrom "${ISO_FILE}" -boot d \
               -vga std -display none \
               -serial "file:test-results/${mode}-serial.log" \
-              -qmp "tcp:127.0.0.1:4444,server,nowait" &
+              -qmp "tcp:127.0.0.1:${port},server,nowait" &
             local qpid=$!
 
-            python3 - "${mode}" <<'PY'
+            python3 - "${mode}" "${port}" <<'PY'
           import json, socket, sys, time
           from PIL import Image
 
           mode = sys.argv[1]
-          sock = socket.create_connection(("127.0.0.1", 4444), timeout=10)
+          port = int(sys.argv[2])
+          sock = None
+          for _ in range(15):
+              try:
+                  sock = socket.create_connection(("127.0.0.1", port), timeout=10)
+                  break
+              except OSError:
+                  time.sleep(0.5)
+          if sock is None:
+              raise RuntimeError(f"Could not connect to QMP on port {port}")
+
           f = sock.makefile("rw")
           f.readline()
           f.write(json.dumps({"execute": "qmp_capabilities"}) + "\n")
           f.flush()
           f.readline()
 
+          prev = 0
           for t in (3, 15, 45, 90):
-              time.sleep(t if t == 3 else (t - prev))
+              time.sleep(t - prev)
               prev = t
               ppm = f"test-results/{mode}-{t}s.ppm"
               png = f"test-results/{mode}-{t}s.png"
@@ -113,11 +125,11 @@ jobs:
             wait "${qpid}" 2>/dev/null || true
           }
 
-          run_boot_test "bios" ""
+          run_boot_test "bios" "4444" ""
 
-          OVMF_CODE="$(find /usr/share/OVMF /usr/share/ovmf -name 'OVMF_CODE*.fd' | head -n 1)"
+          OVMF_CODE="$(find /usr/share/OVMF /usr/share/ovmf -name 'OVMF_CODE*.fd' ! -name '*secboot*' ! -name '*ms*' ! -name '*snakeoil*' 2>/dev/null | head -n 1)"
           if [[ -n "${OVMF_CODE}" ]]; then
-            run_boot_test "uefi" "-bios ${OVMF_CODE}"
+            run_boot_test "uefi" "4445" "-drive if=pflash,format=raw,readonly=on,file=${OVMF_CODE}"
           else
             echo "OVMF_CODE not found; skipping UEFI test."
           fi
