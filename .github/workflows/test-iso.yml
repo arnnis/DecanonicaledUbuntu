@@ -92,14 +92,17 @@ jobs:
           f.flush()
           f.readline()
 
-          for t in (3, 15, 60, 120):
+          for t in (3, 15, 45, 90):
               time.sleep(t if t == 3 else (t - prev))
               prev = t
               ppm = f"test-results/{mode}-{t}s.ppm"
               png = f"test-results/{mode}-{t}s.png"
               f.write(json.dumps({"execute": "screendump", "arguments": {"filename": ppm}}) + "\n")
               f.flush()
-              f.readline()
+              while True:
+                  resp = json.loads(f.readline())
+                  if "return" in resp or "error" in resp:
+                      break
               Image.open(ppm).save(png)
               print(f"Captured {png} ({Image.open(png).size})")
 
@@ -122,6 +125,7 @@ jobs:
           ls -lh test-results/
 
       - name: Upload QEMU boot screenshots & logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: qemu-boot-test-${{ inputs.iso_run_id }}
