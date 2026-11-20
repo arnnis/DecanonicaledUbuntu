@@ -18,12 +18,12 @@ A `buildd`-style **GitHub Actions Build Farm** + **Sharded GitHub Releases APT R
 - **Ubuntu Pro / Advantage:** Purges `ubuntu-advantage-tools` and `ubuntu-pro-client`.
 - **Pre-installed Bloat:** Purges `gnome-tour`, `ubuntu-web-launchers`, pre-installed games (`aisleriot`, `gnome-mahjongg`, `gnome-mines`, `gnome-sudoku`), `rhythmbox`, `totem`, and `thunderbird`.
 
-### Moved / Replaced
+### Replaced
 - **Firefox:** Replaced Ubuntu's snap stub with Mozilla's native `.deb` from `packages.mozilla.org`.
 - **Installer:** Replaced Canonical's snap-based installer with **Calamares** (`calamares`).
 - **APT Updates:** Configured `/etc/apt/sources.list.d/decanonicaled.list` to pull daily farm-compiled updates from your GPG-signed, sharded GitHub Releases (`apt-pool-<codename>-*`), while keeping `ubuntu-drivers-common` and `dkms` intact for hardware/GPU drivers.
 
-## Just Goals
+##  Goals
 
 - **Actually knowing what is running on your system:** Compiling your own OS means you can see and verify what is actually running on your machine (every farm-built package is tagged `+decanonicaled1`, so you can check with `dpkg-query -W | grep -v '+decanonicaled'`).
 - **Preventing build-time injection:** Compiling directly from inspectable source code (`apt-get source`) on transparent GitHub Actions runners avoids blindly trusting pre-built third-party binaries and reduces the risk of build-time supply-chain injection.
