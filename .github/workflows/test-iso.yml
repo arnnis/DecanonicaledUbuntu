@@ -1,0 +1,129 @@
+name: Test ISO Boot in QEMU
+
+on:
+  workflow_dispatch:
+    inputs:
+      iso_run_id:
+        description: "Workflow run ID that produced the ISO artifact"
+        required: true
+        default: "44147092742"
+        type: string
+      artifact_name:
+        description: "ISO artifact name"
+        required: true
+        default: "decanonicaled-ubuntu-resolute-gnome-minimal-full"
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  test-qemu-boot:
+    name: QEMU Boot Test (BIOS & UEFI)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Maximize disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android || true
+          sudo apt-get clean
+
+      - name: Download ISO artifact from run ${{ inputs.iso_run_id }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: iso-dist
+          run-id: ${{ inputs.iso_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify ISO checksum
+        run: |
+          cd iso-dist
+          ls -lh
+          sha256sum -c SHA256SUMS
+
+      - name: Install QEMU & OVMF (UEFI)
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            qemu-system-x86 \
+            ovmf \
+            python3-pil \
+            netcat-openbsd
+
+      - name: Boot ISO in QEMU (BIOS & UEFI) and capture screenshots
+        run: |
+          ISO_FILE="$(find iso-dist -maxdepth 1 -name '*.iso' | head -n 1)"
+          mkdir -p test-results
+
+          ACCEL_ARGS="-accel tcg"
+          if [[ -e /dev/kvm ]] && sudo chmod 666 /dev/kvm 2>/dev/null; then
+            ACCEL_ARGS="-enable-kvm -cpu host"
+            echo "KVM acceleration enabled!"
+          else
+            echo "KVM unavailable; using TCG software emulation."
+          fi
+
+          run_boot_test() {
+            local mode="$1"
+            local extra_args="$2"
+            echo "=== Starting ${mode} boot test ==="
+
+            qemu-system-x86_64 \
+              -m 4096 -smp 4 ${ACCEL_ARGS} \
+              ${extra_args} \
+              -cdrom "${ISO_FILE}" -boot d \
+              -vga std -display none \
+              -serial "file:test-results/${mode}-serial.log" \
+              -qmp "tcp:127.0.0.1:4444,server,nowait" &
+            local qpid=$!
+
+            python3 - "${mode}" <<'PY'
+          import json, socket, sys, time
+          from PIL import Image
+
+          mode = sys.argv[1]
+          sock = socket.create_connection(("127.0.0.1", 4444), timeout=10)
+          f = sock.makefile("rw")
+          f.readline()
+          f.write(json.dumps({"execute": "qmp_capabilities"}) + "\n")
+          f.flush()
+          f.readline()
+
+          for t in (3, 15, 60, 120):
+              time.sleep(t if t == 3 else (t - prev))
+              prev = t
+              ppm = f"test-results/{mode}-{t}s.ppm"
+              png = f"test-results/{mode}-{t}s.png"
+              f.write(json.dumps({"execute": "screendump", "arguments": {"filename": ppm}}) + "\n")
+              f.flush()
+              f.readline()
+              Image.open(ppm).save(png)
+              print(f"Captured {png} ({Image.open(png).size})")
+
+          sock.close()
+          PY
+
+            kill "${qpid}" 2>/dev/null || true
+            wait "${qpid}" 2>/dev/null || true
+          }
+
+          run_boot_test "bios" ""
+
+          OVMF_CODE="$(find /usr/share/OVMF /usr/share/ovmf -name 'OVMF_CODE*.fd' | head -n 1)"
+          if [[ -n "${OVMF_CODE}" ]]; then
+            run_boot_test "uefi" "-bios ${OVMF_CODE}"
+          else
+            echo "OVMF_CODE not found; skipping UEFI test."
+          fi
+
+          ls -lh test-results/
+
+      - name: Upload QEMU boot screenshots & logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-boot-test-${{ inputs.iso_run_id }}
+          path: test-results/*.png
+          retention-days: 7
