@@ -10,19 +10,6 @@ A `buildd`-style **GitHub Actions Build Farm** + **Sharded GitHub Releases APT R
 |---|---|
 | ![GRUB2 Boot Menu](docs/screenshots/grub.png) | ![Resolute GNOME Desktop](docs/screenshots/desktop.png) |
 
-## Goals & Why Self-Compile?
-
-- **Prevent build-time injection:** When you download a pre-built OS or binary package, you have to trust that the vendor's private build farm didn't inject anything between the public source code and the compiled binary. By compiling packages directly from inspectable source code (`apt-get source`) on transparent GitHub Actions runners, you reduce blind trust in third-party binaries.
-- **Know what actually runs on your system:** Every package compiled by the farm is tagged with `+decanonicaled1` so you can audit what is running on your machine at any time (`dpkg-query -W | grep -v '+decanonicaled'`).
-- **Automated verification:** Every ISO build is automatically checksummed and boot-tested in QEMU (both BIOS and UEFI) with screenshots uploaded as workflow artifacts.
-
-## Downloads & Builds
-
-- **GitHub Actions (Workflows & ISO Artifacts):** https://github.com/arnnis/DecanonicaledUbuntu/actions
-- **Latest `full` Scope ISO Build (`resolute` / `gnome-minimal`):** https://github.com/arnnis/DecanonicaledUbuntu/actions/runs/44147092742
-  *(Download the `decanonicaled-ubuntu-resolute-gnome-minimal-full` `.zip` artifact and extract the `.iso` + `SHA256SUMS`. Note: GitHub Actions artifacts expire after 14 days; trigger a workflow run or push a `v*` tag for permanent GitHub Releases.)*
-- **GitHub Releases (Sharded APT Pool & Tagged ISO Releases):** https://github.com/arnnis/DecanonicaledUbuntu/releases
-
 ## What Gets Removed & Replaced
 
 ### Removed
@@ -35,6 +22,18 @@ A `buildd`-style **GitHub Actions Build Farm** + **Sharded GitHub Releases APT R
 - **Firefox:** Replaced Ubuntu's snap stub with Mozilla's native `.deb` from `packages.mozilla.org`.
 - **Installer:** Replaced Canonical's snap-based installer with **Calamares** (`calamares`).
 - **APT Updates:** Configured `/etc/apt/sources.list.d/decanonicaled.list` to pull daily farm-compiled updates from your GPG-signed, sharded GitHub Releases (`apt-pool-<codename>-*`), while keeping `ubuntu-drivers-common` and `dkms` intact for hardware/GPU drivers.
+
+## Just Goals
+
+- **Actually knowing what is running on your system:** Compiling your own OS means you can see and verify what is actually running on your machine (every farm-built package is tagged `+decanonicaled1`, so you can check with `dpkg-query -W | grep -v '+decanonicaled'`).
+- **Preventing build-time injection:** Compiling directly from inspectable source code (`apt-get source`) on transparent GitHub Actions runners avoids blindly trusting pre-built third-party binaries and reduces the risk of build-time supply-chain injection.
+
+## Downloads & Builds
+
+- **GitHub Actions (Workflows & ISO Artifacts):** https://github.com/arnnis/DecanonicaledUbuntu/actions
+- **Latest `full` Scope ISO Build (`resolute` / `gnome-minimal`):** https://github.com/arnnis/DecanonicaledUbuntu/actions/runs/44147092742
+  *(Download the `decanonicaled-ubuntu-resolute-gnome-minimal-full` `.zip` artifact and extract the `.iso` + `SHA256SUMS`. Note: GitHub Actions artifacts expire after 14 days; trigger a workflow run or push a `v*` tag for permanent GitHub Releases.)*
+- **GitHub Releases (Sharded APT Pool & Tagged ISO Releases):** https://github.com/arnnis/DecanonicaledUbuntu/releases
 
 ## Architecture
 
