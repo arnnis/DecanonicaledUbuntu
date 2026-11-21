@@ -112,6 +112,17 @@ echo "=== [99-cleanup-farm-repo] Removing temporary local APT repo from image ==
 rm -rf /opt/decanonicaled-repo /etc/apt/sources.list.d/decanonicaled-local* /etc/apt/preferences.d/decanonicaled-local*
 apt-get clean
 EOF
+elif [[ -n "${APT_SHARD_URLS}" ]]; then
+  echo "=== No local FARM_DEBS_DIR; upgrading chroot from sharded GitHub Releases ==="
+  cat <<'EOF' > config/hooks/00-upgrade-farm.hook.chroot
+#!/bin/bash
+set -euo pipefail
+echo "=== [00-upgrade-farm] Upgrading from sharded GitHub Releases APT repo ==="
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get dist-upgrade -y --allow-downgrades
+apt-get clean
+EOF
 fi
 
 chmod +x config/hooks/*.hook.chroot
