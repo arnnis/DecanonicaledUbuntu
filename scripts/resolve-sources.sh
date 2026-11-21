@@ -74,17 +74,20 @@ Pin: release a=*
 Pin-Priority: -10
 EOF
 
-  # Use APT's real solver (with Recommends ON) + base container packages, instead of
-  # apt-cache depends --recurse which expands every virtual provider (linux-aws, gcc-11..16, etc.)
+  # Use APT's real solver (with Recommends ON) against an empty dpkg status file
+  # so Recommends of base packages are not skipped, plus base container packages.
+  EMPTY_STATUS="$(mktemp)"
   BIN_PKGS=$(
     {
       dpkg-query -W -f='${Package}\n'
-      apt-get install --simulate --install-recommends "${SEED_PKGS[@]}" "${DRIVER_PKGS[@]}" 2>/dev/null \
+      apt-get -o "Dir::State::status=${EMPTY_STATUS}" install --simulate --install-recommends \
+        "${SEED_PKGS[@]}" "${DRIVER_PKGS[@]}" 2>/dev/null \
         | awk '/^Inst / { print $2 }'
       echo "linux-image-generic"
       echo "linux-headers-generic"
     } | grep -vE "${EXCLUDE_RE}" | sort -u
   )
+  rm -f "${EMPTY_STATUS}"
 
   apt-cache show ${BIN_PKGS} 2>/dev/null \
     | awk '
