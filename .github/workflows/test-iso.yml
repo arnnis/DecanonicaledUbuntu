@@ -77,8 +77,8 @@ jobs:
           done
           echo "PASS: firefox, calamares, ubuntu-drivers-common, and dkms are all present."
 
-          echo "=== Non-farm packages in ISO (first 60) ==="
-          grep -v '+decanonicaled' "${MANIFEST}" | head -n 60 || true
+          echo "=== Non-farm packages in ISO ==="
+          grep -v '+decanonicaled' "${MANIFEST}" || true
 
           sudo umount /mnt/iso
 
