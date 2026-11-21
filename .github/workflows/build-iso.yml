@@ -164,6 +164,7 @@ jobs:
 
       - name: Download all farm-compiled .deb packages (reused run)
         if: ${{ inputs.reuse_farm_run_id != '' }}
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           pattern: farm-debs-*
