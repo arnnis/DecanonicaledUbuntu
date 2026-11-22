@@ -57,7 +57,6 @@ EOF
 
 apt-get update -qq
 
-export DEB_BUILD_OPTIONS="nocheck nodoc parallel=$(nproc)"
 export DEBEMAIL="farm@decanonicaled.local"
 export DEBFULLNAME="DecanonicaledUbuntu Build Farm"
 export PATH="/usr/lib/ccache:${PATH}"
@@ -67,6 +66,12 @@ rm -rf "${WORK_ROOT}"
 mkdir -p "${WORK_ROOT}"
 
 for pkg in ${PACKAGES}; do
+  # Skip nodoc for documentation-only packages like manpages so they compile cleanly
+  if [[ "${pkg}" == "manpages" ]]; then
+    export DEB_BUILD_OPTIONS="nocheck parallel=$(nproc)"
+  else
+    export DEB_BUILD_OPTIONS="nocheck nodoc parallel=$(nproc)"
+  fi
   echo "============================================================"
   echo ">>> [buildd-worker:${UBUNTU_CODENAME}] Building source package: ${pkg}"
   echo "============================================================"
