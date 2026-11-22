@@ -109,7 +109,6 @@ for pkg in ${PACKAGES}; do
     find "${PKG_DIR}" -maxdepth 1 -name '*.deb' \
       ! -name '*-dbgsym_*.deb' \
       ! -name '*-dbg_*.deb' \
-      ! -name '*-dev_*.deb' \
       ! -name '*-doc_*.deb' \
       -exec cp -v {} "${OUT_DIR}/" \;
   else
