@@ -6,9 +6,10 @@ echo "=== [01-debloat] Removing Snap, telemetry, and Canonical bloat ==="
 export DEBIAN_FRONTEND=noninteractive
 
 # Query only actually-installed bloat packages so apt-get purge never aborts on a missing package name.
-# Note: Do NOT purge libwhoopsie0 / libwhoopsie-preferences0 / whoopsie-preferences, because
-# gnome-control-center depends on them for its Privacy panel and purging them cascades into removing GNOME/gdm3.
-TO_PURGE=$(dpkg-query -W -f='${Package}\n' 2>/dev/null | grep -E '^(snapd|gnome-software-plugin-snap|libsnapd-glib.*|gir1\.2-snapd.*|ubuntu-report|popularity-contest|whoopsie|apport|apport-gtk|apport-symptoms|apport-core-dump-handler|python3-apport|kerneloops|ubuntu-advantage-.*|ubuntu-pro-client.*|gnome-tour|ubuntu-web-launchers|aisleriot|gnome-mahjongg|gnome-mines|gnome-sudoku|rhythmbox.*|totem.*|thunderbird.*)$' || true)
+# Note: Do NOT purge libwhoopsie* (required by gnome-control-center) or libsnapd-glib* / gir1.2-snapd*
+# (required by libpipewire-0.3-modules, libwireplumber-0.5-0, cups-daemon, and gnome-shell-ubuntu-extensions);
+# they are client libraries with no dependency on whoopsie or snapd.
+TO_PURGE=$(dpkg-query -W -f='${Package}\n' 2>/dev/null | grep -E '^(snapd|gnome-software-plugin-snap|ubuntu-report|popularity-contest|whoopsie|apport|apport-gtk|apport-symptoms|apport-core-dump-handler|python3-apport|kerneloops|ubuntu-advantage-.*|ubuntu-pro-client.*|gnome-tour|ubuntu-web-launchers|aisleriot|gnome-mahjongg|gnome-mines|gnome-sudoku|rhythmbox.*|totem.*|thunderbird.*)$' || true)
 
 if [[ -n "${TO_PURGE}" ]]; then
   echo "Purging packages:"
