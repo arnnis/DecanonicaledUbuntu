@@ -68,14 +68,14 @@ jobs:
           fi
           echo "PASS: Zero forbidden snap/telemetry/Pro packages present."
 
-          for req in firefox calamares ubuntu-drivers-common dkms; do
+          for req in gdm3 gnome-shell ubuntu-session gnome-control-center firefox calamares ubuntu-drivers-common dkms; do
             if ! grep -qE "^${req}\s" "${MANIFEST}"; then
               echo "ERROR: Required package '${req}' missing from ISO manifest!" >&2
               sudo umount /mnt/iso
               exit 1
             fi
           done
-          echo "PASS: firefox, calamares, ubuntu-drivers-common, and dkms are all present."
+          echo "PASS: gdm3, gnome-shell, ubuntu-session, gnome-control-center, firefox, calamares, ubuntu-drivers-common, and dkms are all present."
 
           echo "=== Non-farm packages in ISO ==="
           grep -v '+decanonicaled' "${MANIFEST}" || true

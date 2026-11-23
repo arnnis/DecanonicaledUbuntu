@@ -147,6 +147,14 @@ case "${FLAVOR}" in
   gnome-minimal)
     cat <<'EOF' >> config/package-lists/decanonicaled.list.chroot
 ubuntu-desktop-minimal
+gdm3
+gnome-shell
+ubuntu-session
+gnome-control-center
+pipewire-pulse
+wireplumber
+xwayland
+xdg-desktop-portal-gnome
 gnome-terminal
 nautilus
 gnome-text-editor

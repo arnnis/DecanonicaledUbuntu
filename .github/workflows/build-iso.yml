@@ -307,6 +307,15 @@ jobs:
             sudo umount /mnt/iso
             exit 1
           fi
+          if [[ "${FLAVOR}" == "gnome-minimal" ]]; then
+            for req in gdm3 gnome-shell ubuntu-session gnome-control-center firefox calamares; do
+              if ! grep -qE "^${req}\s" "${MANIFEST}"; then
+                echo "ERROR: Required desktop package '${req}' missing from ISO manifest!" >&2
+                sudo umount /mnt/iso
+                exit 1
+              fi
+            done
+          fi
           sudo umount /mnt/iso
 
       - name: Install QEMU & OVMF (UEFI)
